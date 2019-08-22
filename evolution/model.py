@@ -168,6 +168,10 @@ class Environment(ABC):
             for _ in
             range(self._initial_population_size)
         ]
+
+        for individual in new_generation:
+            delattr(individual, '_fitness')
+
         self._generations.append(
             new_generation
         )
