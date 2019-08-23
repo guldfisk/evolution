@@ -1,32 +1,66 @@
 from __future__ import annotations
 
 import typing as t
-from abc import ABC, abstractmethod
-from collections import OrderedDict
-from copy import copy
 
 import functools
 import operator
 import random
+import copy
+
+from abc import ABC, abstractmethod
+from collections import OrderedDict
 
 import numpy as np
+
+
+class Constraint(ABC):
+    description = 'A constraint'  # type: str
+
+    @abstractmethod
+    def score(self, individual: Individual) -> float:
+        pass
+
+
+class ConstraintSet(object):
+
+    def __init__(self, constraints: t.Iterable[t.Tuple[Constraint, float]]):
+        self._constraints = tuple(constraint for constraint, _ in constraints)
+        self._weights = tuple(weight for _, weight in constraints)
+
+    def score(self, individual: Individual) -> t.Tuple[float, ...]:
+        unweighted_values = tuple(
+            constraint.score(individual)
+            for constraint in
+            self._constraints
+        )
+
+        return (
+           functools.reduce(
+               operator.mul,
+               (
+                   value ** weight
+                   for value, weight in
+                   zip(unweighted_values, self._weights)
+               )
+           ),
+       ) + unweighted_values
+
+    def total_score(self, individual: Individual) -> float:
+        return self.score(individual)[0]
+
+    def __iter__(self) -> t.Iterable[Constraint]:
+        return self._constraints.__iter__()
 
 
 class Individual(ABC):
 
     @property
-    def fitness(self) -> float:
-        if not hasattr(self, '_fitness'):
-            setattr(self, '_fitness', self.calc_fitness())
+    def weighted_fitness(self) -> float:
+        return getattr(self, '_fitness')[0]
+
+    @property
+    def fitness(self) -> t.Tuple[float, ...]:
         return getattr(self, '_fitness')
-
-    @abstractmethod
-    def calc_fitness(self) -> float:
-        pass
-
-    @abstractmethod
-    def __copy__(self) -> Individual:
-        pass
 
 
 Generation = t.List[Individual]
@@ -75,38 +109,42 @@ class Logger(object):
 
     def __init__(self, operations: t.Optional[OrderedDict[str, LoggingOperation]] = None):
         self._operations = operations if operations is not None else OrderedDict()
+        
         self._cache_fitnesses = any(
             isinstance(operation, FitnessLoggingOperation)
             for operation in
             self._operations.values()
         )
 
-        self._frames: t.List[OrderedDict[str, t.Any]] = []
+        self._values: OrderedDict[str, t.List[t.Any]] = OrderedDict(
+            (key, [])
+            for key in
+            self._operations.keys()
+        )
 
-    def get_log_frame(self, generation: Generation) -> OrderedDict[str, t.Any]:
+    @property
+    def labels(self) -> t.Iterable[str]:
+        return self._operations.keys()
+
+    @property
+    def values(self) -> OrderedDict[str, t.List[t.Any]]:
+        return self._values
+
+    def add_frame(self, generation: Generation) -> None:
         fitnesses = (
-            np.asarray((individual.fitness for individual in generation))
+            np.asarray([individual.fitness[0] for individual in generation])
             if self._cache_fitnesses else
             None
         )
-        frame = OrderedDict(
-            [
-                (
-                    key,
-                    operation.inspect(
-                        fitnesses
-                        if isinstance(operation, FitnessLoggingOperation) else
-                        generation
-                    ),
+        for key, operation in self._operations.items():
+            self._values[key].append(
+                operation.inspect(
+                    fitnesses
+                    if isinstance(operation, FitnessLoggingOperation) else
+                    generation
                 )
-                for key, operation in
-                self._operations.items()
-            ]
-        )
-
-        self._frames.append(frame)
-        return frame
-
+            )
+            
 
 class Environment(ABC):
 
@@ -114,73 +152,99 @@ class Environment(ABC):
         self,
         individual_factory: t.Callable[[], Individual],
         initial_population_size: int,
-        mutate: t.Callable[[Individual], Individual],
-        mate: t.Callable[[Individual, Individual], t.Tuple[Individual, Individual]],
+        mutate: t.Callable[[Individual, Environment], Individual],
+        mate: t.Callable[[Individual, Individual, Environment], t.Tuple[Individual, Individual]],
+        constraints: ConstraintSet,
         logger: t.Optional[Logger] = None,
     ):
         self._individual_factory = individual_factory
         self._initial_population_size = initial_population_size
-        self._generations: t.List[Generation] = [
-            [
-                individual_factory()
-                for _ in
-                range(initial_population_size)
-            ]
-        ]
+        self._generations: t.List[Generation] = []
 
         self._mutate = mutate
         self._mate = mate
 
+        self._constraints = constraints
+
         self._logger = logger if logger is not None else Logger()
 
-        self._mutate_threshold = .25
-        self._mate_threshold = .2
+        self._mutate_threshold = .3
+        self._mate_threshold = .3
         self._tournament_size = 4
 
     @classmethod
     def print(cls, *args, **kwargs):
-        print(*(str(arg).ljust(50) for arg in args), **kwargs)
+        print(*(str(arg).ljust(35) for arg in args), **kwargs)
 
-    def mutate_population(self) -> None:
-        for individual in self._generations[-1]:
-            if random.random() < self._mutate_threshold:
-                self._mutate(individual)
-
-    def mate_population(self) -> None:
-        for first, second in zip(
-            self._generations[-1][0::2],
-            self._generations[-1][1::2],
-        ):
-            if random.random() < self._mate_threshold:
-                self._mate(first, second)
-
-    def spawn_generation(self) -> Environment:
-        new_generation = [
-            copy(
-                sorted(
-                    random.sample(
-                        self._generations[-1],
-                        self._tournament_size,
-                    ),
-                    key=lambda individual: individual.fitness,
-                )[-1]
-            )
+    def _get_initial_generation(self) -> Generation:
+        generation = [
+            self._individual_factory()
             for _ in
             range(self._initial_population_size)
         ]
+        for individual in generation:
+            setattr(individual, '_fitness', self._constraints.score(individual))
 
-        for individual in new_generation:
-            delattr(individual, '_fitness')
+        return generation
+
+    def mutate_population(self, generation: Generation) -> None:
+        for individual in generation:
+            if random.random() < self._mutate_threshold:
+                self._mutate(individual, self)
+                setattr(individual, '_changed', True)
+
+    def mate_population(self, generation: Generation) -> None:
+        for first, second in zip(
+            generation[0::2],
+            generation[1::2],
+        ):
+            if random.random() < self._mate_threshold:
+                self._mate(first, second, self)
+                setattr(first, '_changed', True)
+                setattr(second, '_changed', True)
+
+    def spawn_generation(self) -> Environment:
+        if not self._generations:
+            new_generation = self._get_initial_generation()
+
+        else:
+            new_generation = [
+                copy.deepcopy(
+                    sorted(
+                        random.sample(
+                            self._generations[-1],
+                            self._tournament_size,
+                        ),
+                        key=lambda _individual: _individual.fitness[0],
+                    )[-1]
+                )
+                for _ in
+                range(self._initial_population_size)
+            ]
+
+            for individual in new_generation:
+                if hasattr(individual, '_changed'):
+                    delattr(individual, '_changed')
+
+            self.mate_population(new_generation)
+            self.mutate_population(new_generation)
+
+            for individual in new_generation:
+                if hasattr(individual, '_changed'):
+                    setattr(individual, '_fitness', self._constraints.score(individual))
 
         self._generations.append(
             new_generation
         )
-        
-        self.mate_population()
-        self.mutate_population()
 
-        frame = self._logger.get_log_frame(new_generation)
-        self.print(frame.values())
+        self._logger.add_frame(new_generation)
+        self.print(
+            *(
+                item[-1]
+                for item in
+                self._logger.values.values()
+            )
+        )
 
         return self
     
