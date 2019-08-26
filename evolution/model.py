@@ -239,6 +239,7 @@ class Environment(ABC):
 
         self._logger.add_frame(new_generation)
         self.print(
+            len(self._generations) - 1,
             *(
                 item[-1]
                 for item in
