@@ -63,6 +63,7 @@ class Individual(ABC):
         return getattr(self, '_fitness')
 
 
+I = t.TypeVar('I', bound = Individual)
 Generation = t.List[Individual]
 
 
@@ -116,18 +117,14 @@ class Logger(object):
             self._operations.values()
         )
 
-        self._values: OrderedDict[str, t.List[t.Any]] = OrderedDict(
-            (key, [])
-            for key in
-            self._operations.keys()
-        )
+        self._values: t.List[t.List[t.Any]] = []
 
     @property
     def labels(self) -> t.Iterable[str]:
         return self._operations.keys()
 
     @property
-    def values(self) -> OrderedDict[str, t.List[t.Any]]:
+    def values(self) -> t.Sequence[t.Sequence[t.Any]]:
         return self._values
 
     def add_frame(self, generation: Generation) -> None:
@@ -136,24 +133,27 @@ class Logger(object):
             if self._cache_fitnesses else
             None
         )
-        for key, operation in self._operations.items():
-            self._values[key].append(
+        self._values.append(
+            [
                 operation.inspect(
                     fitnesses
                     if isinstance(operation, FitnessLoggingOperation) else
                     generation
                 )
-            )
+                for operation in
+                self._operations.values()
+            ]
+        )
             
 
-class Environment(ABC):
+class Environment(t.Generic[I]):
 
     def __init__(
         self,
-        individual_factory: t.Callable[[], Individual],
+        individual_factory: t.Callable[[], I],
         initial_population_size: int,
-        mutate: t.Callable[[Individual, Environment], Individual],
-        mate: t.Callable[[Individual, Individual, Environment], t.Tuple[Individual, Individual]],
+        mutate: t.Callable[[I, Environment], I],
+        mate: t.Callable[[I, I, Environment], t.Tuple[I, I]],
         constraints: ConstraintSet,
         logger: t.Optional[Logger] = None,
     ):
@@ -164,13 +164,13 @@ class Environment(ABC):
         self._mutate = mutate
         self._mate = mate
 
-        self._constraints = constraints
+        self._constraints: ConstraintSet = constraints
 
-        self._logger = logger if logger is not None else Logger()
+        self._logger: Logger = logger if logger is not None else Logger()
 
-        self._mutate_threshold = .3
-        self._mate_threshold = .3
-        self._tournament_size = 4
+        self._mutate_threshold: float = .3
+        self._mate_threshold: float = .3
+        self._tournament_size: int = 4
 
     @classmethod
     def print(cls, *args, **kwargs):
@@ -240,11 +240,7 @@ class Environment(ABC):
         self._logger.add_frame(new_generation)
         self.print(
             len(self._generations) - 1,
-            *(
-                item[-1]
-                for item in
-                self._logger.values.values()
-            )
+            *self._logger.values[-1],
         )
 
         return self
@@ -254,7 +250,7 @@ class Environment(ABC):
             self.spawn_generation()
         return self
     
-    def fittest(self) -> Individual:
+    def fittest(self) -> I:
         return sorted(
             self._generations[-1],
             key = lambda individual: individual.fitness,
