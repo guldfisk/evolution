@@ -38,6 +38,9 @@ class Environment(t.Generic[I]):
         self._mate_threshold: float = .3
         self._tournament_size: int = 4
 
+    @property
+    def logger(self) -> Logger:
+        return self._logger
 
     def _get_initial_generation(self) -> Generation:
         generation = [
