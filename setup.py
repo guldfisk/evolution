@@ -16,6 +16,6 @@ setup(
 	packages = ['evolution'],
 	package_data = {'': extra_files},
 	install_requires = [
-		'numpy',
+		'numpy', 'frozendict'
 	],
 )

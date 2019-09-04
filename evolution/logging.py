@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+import itertools
 import typing as t
 
 from abc import ABC, abstractmethod
@@ -101,5 +102,14 @@ class Logger(object):
         return frame
     
     
-def print_log_frame(frame: LogFrame):
-    print(*(str(arg).ljust(35) for arg in frame))
+def print_log_frame(n_frame: int, frame: LogFrame):
+    print(
+        *(
+            str(arg).ljust(35)
+            for arg in
+            itertools.chain(
+                (n_frame,),
+                frame,
+            )
+        )
+    )

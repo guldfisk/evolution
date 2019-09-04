@@ -5,7 +5,7 @@ import typing as t
 import random
 import copy
 
-from evolution.logging import Logger, LogFrame
+from evolution.logging import Logger, LogFrame, print_log_frame
 from evolution.model import Individual, ConstraintSet, Generation
 
 
@@ -22,6 +22,8 @@ class Environment(t.Generic[I]):
         mate: t.Callable[[I, I, Environment], t.Tuple[I, I]],
         constraints: ConstraintSet,
         logger: t.Optional[Logger] = None,
+        *,
+        print_log_frames: bool = False,
     ):
         self._individual_factory = individual_factory
         self._initial_population_size = initial_population_size
@@ -33,6 +35,7 @@ class Environment(t.Generic[I]):
         self._constraints: ConstraintSet = constraints
 
         self._logger: Logger = logger if logger is not None else Logger()
+        self._print_log_frames = print_log_frames
 
         self._mutate_threshold: float = .3
         self._mate_threshold: float = .3
@@ -103,7 +106,12 @@ class Environment(t.Generic[I]):
             new_generation
         )
 
-        return self._logger.add_frame(new_generation)
+        frame = self._logger.add_frame(new_generation)
+
+        if self._print_log_frames:
+            print_log_frame(len(self._logger.values) - 1, frame)
+
+        return frame
 
     def spawn_generations(self, amount: int) -> Environment:
         for _ in range(amount):
