@@ -22,6 +22,7 @@ class Environment(t.Generic[I]):
         mate: t.Callable[[I, I, Environment], t.Tuple[I, I]],
         constraints: ConstraintSet,
         logger: t.Optional[Logger] = None,
+        save_generations: bool = True,
         *,
         print_log_frames: bool = False,
     ):
@@ -36,6 +37,8 @@ class Environment(t.Generic[I]):
 
         self._logger: Logger = logger if logger is not None else Logger()
         self._print_log_frames = print_log_frames
+
+        self._save_generations = save_generations
 
         self._mutate_threshold: float = .3
         self._mate_threshold: float = .3
@@ -102,9 +105,12 @@ class Environment(t.Generic[I]):
                 if hasattr(individual, '_changed'):
                     setattr(individual, '_fitness', self._constraints.score(individual))
 
-        self._generations.append(
-            new_generation
-        )
+        if self._save_generations:
+            self._generations.append(
+                new_generation
+            )
+        else:
+            self._generations = [new_generation]
 
         frame = self._logger.add_frame(new_generation)
 
