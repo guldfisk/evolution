@@ -10,7 +10,6 @@ import numpy as np
 
 from evolution.model import Generation
 
-
 LogFrame = t.List[t.Any]
 
 
@@ -60,9 +59,11 @@ class LogAverageConstraint(IndividualLoggingOperation):
 
     def inspect(self, generation: Generation) -> t.Any:
         return np.mean(
-            individual.fitness[self._index]
-            for individual in
-            generation
+            [
+                individual.fitness[self._index]
+                for individual in
+                generation
+            ]
         )
 
 
@@ -113,8 +114,8 @@ class Logger(object):
             frame
         )
         return frame
-    
-    
+
+
 def print_log_frame(n_frame: int, frame: LogFrame):
     print(
         *(
