@@ -53,6 +53,19 @@ class LogMax(FitnessLoggingOperation):
         return np.max(fitnesses)
 
 
+class LogAverageConstraint(IndividualLoggingOperation):
+
+    def __init__(self, index: int):
+        self._index = index
+
+    def inspect(self, generation: Generation) -> t.Any:
+        return np.mean(
+            individual.fitness[self._index]
+            for individual in
+            generation
+        )
+
+
 class Logger(object):
 
     def __init__(self, operations: t.Optional[OrderedDict[str, LoggingOperation]] = None):
