@@ -9,7 +9,7 @@ from abc import ABC, abstractmethod
 
 
 class Constraint(ABC):
-    description = 'A constraint'  # type: str
+    description: str = 'A constraint'
 
     @abstractmethod
     def score(self, individual: Individual) -> float:

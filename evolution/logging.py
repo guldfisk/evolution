@@ -119,7 +119,7 @@ class Logger(object):
 def print_log_frame(n_frame: int, frame: LogFrame):
     print(
         *(
-            str(arg).ljust(35)
+            str(arg).ljust(32)
             for arg in
             itertools.chain(
                 (n_frame,),
