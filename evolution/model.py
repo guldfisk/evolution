@@ -57,5 +57,8 @@ class Individual(ABC):
     def fitness(self) -> t.Tuple[float, ...]:
         return getattr(self, '_fitness')
 
+    def score(self, constraints: ConstraintSet) -> t.Tuple[float, ...]:
+        return constraints.score(self)
+
 
 Generation = t.List[Individual]

@@ -70,7 +70,12 @@ class SimpleModel(EvolutionModel[I]):
         initial_population_size: int,
         constraints: ConstraintSet,
     ):
-        super().__init__(mutate, mate, individual_factory, constraints)
+        super().__init__(
+            mutate,
+            mate,
+            individual_factory,
+            constraints,
+        )
         self._initial_population_size = initial_population_size
 
         self._mutate_threshold: float = .3
@@ -87,7 +92,11 @@ class SimpleModel(EvolutionModel[I]):
             range(self._initial_population_size)
         ]
         for individual in generation:
-            setattr(individual, '_fitness', self._constraints.score(individual))
+            setattr(
+                individual,
+                '_fitness',
+                individual.score(self._constraints)
+            )
 
         self._generation = generation
 
@@ -117,7 +126,11 @@ class SimpleModel(EvolutionModel[I]):
 
         for individual in new_generation:
             if hasattr(individual, '_changed'):
-                setattr(individual, '_fitness', self._constraints.score(individual))
+                setattr(
+                    individual,
+                    '_fitness',
+                    individual.score(self._constraints)
+                )
 
         self._generation = new_generation
 
@@ -173,7 +186,13 @@ class VolatileGroupModel(EvolutionModel[I]):
         generation = self._stable + self._volatile
 
         for individual in generation:
-            setattr(individual, '_fitness', self._constraints.score(individual))
+            setattr(
+                individual,
+                '_fitness',
+                individual.score(
+                    self._constraints
+                )
+            )
 
         return generation
 
@@ -246,7 +265,13 @@ class VolatileGroupModel(EvolutionModel[I]):
 
         for individual in new_generation:
             if hasattr(individual, '_changed'):
-                setattr(individual, '_fitness', self._constraints.score(individual))
+                setattr(
+                    individual,
+                    '_fitness',
+                    individual.score(
+                        self._constraints
+                    ),
+                )
 
         self._stable = new_stable
         self._volatile = new_volatile
@@ -291,7 +316,13 @@ class IslandModel(EvolutionModel[I]):
         generation = self._generation
 
         for individual in generation:
-            setattr(individual, '_fitness', self._constraints.score(individual))
+            setattr(
+                individual,
+                '_fitness',
+                individual.score(
+                    self._constraints
+                ),
+            )
 
         return generation
 
@@ -331,13 +362,19 @@ class IslandModel(EvolutionModel[I]):
 
         for individual in generation:
             if hasattr(individual, '_changed'):
-                setattr(individual, '_fitness', self._constraints.score(individual))
+                setattr(
+                    individual,
+                    '_fitness',
+                    individual.score(
+                        self._constraints
+                    ),
+                )
 
         return generation
 
 
 class Environment(t.Generic[I]):
-
+    
     def __init__(
         self,
         model: EvolutionModel[I],
@@ -355,7 +392,7 @@ class Environment(t.Generic[I]):
         self._save_generations = save_generations
 
         self._generations: t.List[Generation] = []
-
+        
     @property
     def logger(self) -> Logger:
         return self._logger
