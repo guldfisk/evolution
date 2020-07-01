@@ -30,25 +30,25 @@ class IndividualLoggingOperation(LoggingOperation):
 class FitnessLoggingOperation(LoggingOperation):
 
     @abstractmethod
-    def inspect(self, fitnesses: np.ndarray) -> t.Any:
+    def inspect(self, fitnesses: np.ndarray) -> float:
         pass
 
 
 class LogAverage(FitnessLoggingOperation):
 
-    def inspect(self, fitnesses: np.ndarray) -> t.Any:
+    def inspect(self, fitnesses: np.ndarray) -> float:
         return np.mean(fitnesses)
 
 
 class LogMedian(FitnessLoggingOperation):
 
-    def inspect(self, fitnesses: np.ndarray) -> t.Any:
+    def inspect(self, fitnesses: np.ndarray) -> float:
         return np.median(fitnesses)
 
 
 class LogMax(FitnessLoggingOperation):
 
-    def inspect(self, fitnesses: np.ndarray) -> t.Any:
+    def inspect(self, fitnesses: np.ndarray) -> float:
         return np.max(fitnesses)
 
 
@@ -57,7 +57,7 @@ class LogAverageConstraint(IndividualLoggingOperation):
     def __init__(self, index: int):
         self._index = index
 
-    def inspect(self, generation: Generation) -> t.Any:
+    def inspect(self, generation: Generation) -> float:
         return np.mean(
             [
                 individual.fitness[self._index]
@@ -81,7 +81,7 @@ class Logger(object):
         self._values: t.List[LogFrame] = []
 
     @property
-    def operations(self) -> t.Mapping[str, LoggingOperation]:
+    def operations(self) -> OrderedDict[str, LoggingOperation]:
         return self._operations
 
     @property

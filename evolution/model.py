@@ -18,7 +18,7 @@ class Constraint(ABC):
 
 class ConstraintSet(object):
 
-    def __init__(self, constraints: t.Iterable[t.Tuple[Constraint, float]]):
+    def __init__(self, constraints: t.Iterable[t.Tuple[Constraint, float]] = ()):
         self._constraints = tuple(constraint for constraint, _ in constraints)
         self._weights = tuple(weight for _, weight in constraints)
 
