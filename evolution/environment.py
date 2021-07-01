@@ -11,7 +11,7 @@ from operator import add
 from abc import abstractmethod
 
 from evolution.logging import Logger, LogFrame, print_log_frame
-from evolution.model import Individual, ConstraintSet, Generation
+from evolution.model import Individual, Generation
 
 
 I = t.TypeVar('I', bound = Individual)
@@ -23,13 +23,13 @@ class EvolutionModel(t.Generic[I]):
         self,
         mutate: t.Callable[[I, Environment], I],
         mate: t.Callable[[I, I, Environment], t.Tuple[I, I]],
+        fitness_evaluator: t.Callable[[I], t.Tuple[float, ...]],
         individual_factory: t.Callable[[], I],
-        constraints: ConstraintSet = ConstraintSet(),
     ):
         self._mutate = mutate
         self._mate = mate
+        self._fitness_evaluator = fitness_evaluator
         self._individual_factory = individual_factory
-        self._constraints = constraints
         self._environment: t.Optional[Environment] = None
 
     def _set_mutate(self, f: t.Callable[[I, Environment], I]) -> None:
@@ -46,11 +46,6 @@ class EvolutionModel(t.Generic[I]):
         self._environment = environment
 
     environment = property(fset = _set_environment)
-
-    def _set_constraints(self, constraints: ConstraintSet) -> None:
-        self._constraints = constraints
-
-    constraints = property(fset = _set_constraints)
 
     def mutate_population(self, generation: t.List[I], threshold: float) -> None:
         for individual in generation:
@@ -90,14 +85,14 @@ class EvolutionModelBlueprint(t.Generic[E]):
         self,
         mutate: t.Callable[[I, Environment], I],
         mate: t.Callable[[I, I, Environment], t.Tuple[I, I]],
+        fitness_evaluator: t.Callable[[I], t.Tuple[float, ...]],
         individual_factory: t.Callable[[], I],
-        constraints: ConstraintSet,
     ) -> E[I]:
         return self._model_type(
             mutate = mutate,
             mate = mate,
+            fitness_evaluator = fitness_evaluator,
             individual_factory = individual_factory,
-            constraints = constraints,
             **self._model_kwargs
         )
 
@@ -108,15 +103,15 @@ class SimpleModel(EvolutionModel[I]):
         self,
         mutate: t.Callable[[I, Environment], I],
         mate: t.Callable[[I, I, Environment], t.Tuple[I, I]],
+        fitness_evaluator: t.Callable[[I], t.Tuple[float, ...]],
         individual_factory: t.Callable[[], I],
         initial_population_size: int,
-        constraints: ConstraintSet,
     ):
         super().__init__(
             mutate,
             mate,
+            fitness_evaluator,
             individual_factory,
-            constraints,
         )
         self._initial_population_size = initial_population_size
 
@@ -136,7 +131,7 @@ class SimpleModel(EvolutionModel[I]):
             setattr(
                 individual,
                 '_fitness',
-                individual.score(self._constraints)
+                self._fitness_evaluator(individual)
             )
 
         self._generation = generation
@@ -151,7 +146,7 @@ class SimpleModel(EvolutionModel[I]):
                         self._generation,
                         self._tournament_size,
                     ),
-                    key = lambda _individual: _individual.fitness[0],
+                    key = lambda _individual: _individual.fitness,
                 )
             )
             for _ in
@@ -170,7 +165,7 @@ class SimpleModel(EvolutionModel[I]):
                 setattr(
                     individual,
                     '_fitness',
-                    individual.score(self._constraints)
+                    self._fitness_evaluator(individual)
                 )
 
         self._generation = new_generation
@@ -184,12 +179,12 @@ class VolatileGroupModel(EvolutionModel[I]):
         self,
         mutate: t.Callable[[I, Environment], I],
         mate: t.Callable[[I, I, Environment], t.Tuple[I, I]],
+        fitness_evaluator: t.Callable[[I], t.Tuple[float, ...]],
         individual_factory: t.Callable[[], I],
         stable_population_size: int,
         volatile_population_size: int,
-        constraints: ConstraintSet,
     ):
-        super().__init__(mutate, mate, individual_factory, constraints)
+        super().__init__(mutate, mate, fitness_evaluator, individual_factory)
 
         self._stable_population_size = stable_population_size
         self._volatile_population_size = volatile_population_size
@@ -230,9 +225,7 @@ class VolatileGroupModel(EvolutionModel[I]):
             setattr(
                 individual,
                 '_fitness',
-                individual.score(
-                    self._constraints
-                )
+                self._fitness_evaluator(individual)
             )
 
         return generation
@@ -246,7 +239,7 @@ class VolatileGroupModel(EvolutionModel[I]):
                             self._stable,
                             self._stable_tournament_size,
                         ),
-                        key = lambda _individual: _individual.fitness[0],
+                        key = lambda _individual: _individual.fitness,
                     )
                 )
                 for _ in
@@ -258,7 +251,7 @@ class VolatileGroupModel(EvolutionModel[I]):
                             self._volatile,
                             self._stable_tournament_size,
                         ),
-                        key = lambda _individual: _individual.fitness[0],
+                        key = lambda _individual: _individual.fitness,
                     )
                 )
                 for _ in
@@ -275,7 +268,7 @@ class VolatileGroupModel(EvolutionModel[I]):
                             self._volatile,
                             self._volatile_tournament_size,
                         ),
-                        key = lambda _individual: _individual.fitness[0],
+                        key = lambda _individual: _individual.fitness,
                     )
                 )
                 for _ in
@@ -287,7 +280,7 @@ class VolatileGroupModel(EvolutionModel[I]):
                             self._stable,
                             self._stable_tournament_size,
                         ),
-                        key = lambda _individual: _individual.fitness[0],
+                        key = lambda _individual: _individual.fitness,
                     )
                 )
                 for _ in
@@ -313,9 +306,7 @@ class VolatileGroupModel(EvolutionModel[I]):
                 setattr(
                     individual,
                     '_fitness',
-                    individual.score(
-                        self._constraints
-                    ),
+                    self._fitness_evaluator(individual),
                 )
 
         self._stable = new_stable
@@ -335,15 +326,15 @@ class IslandModel(EvolutionModel[I]):
         self,
         mutate: t.Callable[[I, Environment], I],
         mate: t.Callable[[I, I, Environment], t.Tuple[I, I]],
+        fitness_evaluator: t.Callable[[I], t.Tuple[float, ...]],
         individual_factory: t.Callable[[], I],
-        constraints: ConstraintSet,
         island_values: t.Sequence[IslandSettings] = (
             IslandSettings(size = 100, extinction_interval = 70, migration = 0),
             IslandSettings(size = 100, extinction_interval = 150, migration = 10),
             IslandSettings(size = 100, extinction_interval = 0, migration = 10),
         ),
     ):
-        super().__init__(mutate, mate, individual_factory, constraints)
+        super().__init__(mutate, mate, fitness_evaluator, individual_factory)
 
         self._island_values = island_values
 
@@ -373,9 +364,7 @@ class IslandModel(EvolutionModel[I]):
             setattr(
                 individual,
                 '_fitness',
-                individual.score(
-                    self._constraints
-                ),
+                self._fitness_evaluator(individual),
             )
 
         return generation
@@ -398,9 +387,7 @@ class IslandModel(EvolutionModel[I]):
                     setattr(
                         individual,
                         '_fitness',
-                        individual.score(
-                            self._constraints
-                        ),
+                        self._fitness_evaluator(individual),
                     )
             else:
                 if idx < 0:
@@ -412,7 +399,7 @@ class IslandModel(EvolutionModel[I]):
                                     options,
                                     self._tournament_size,
                                 ),
-                                key = lambda _individual: _individual.fitness[0],
+                                key = lambda _individual: _individual.fitness,
                             )
                         )
                         for _ in
@@ -429,7 +416,7 @@ class IslandModel(EvolutionModel[I]):
                                 island,
                                 self._tournament_size,
                             ),
-                            key = lambda _individual: _individual.fitness[0],
+                            key = lambda _individual: _individual.fitness,
                         )
                     )
                     for _ in
@@ -455,9 +442,7 @@ class IslandModel(EvolutionModel[I]):
                 setattr(
                     individual,
                     '_fitness',
-                    individual.score(
-                        self._constraints
-                    ),
+                    self._fitness_evaluator(individual),
                 )
 
         self._generation_counter += 1

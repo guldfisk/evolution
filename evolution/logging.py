@@ -10,6 +10,7 @@ import numpy as np
 
 from evolution.model import Generation
 
+
 LogFrame = t.List[t.Any]
 
 
@@ -67,6 +68,21 @@ class LogAverageConstraint(IndividualLoggingOperation):
         )
 
 
+class LogMaxConstraint(IndividualLoggingOperation):
+
+    def __init__(self, index: int):
+        self._index = index
+
+    def inspect(self, generation: Generation) -> float:
+        return np.max(
+            [
+                individual.fitness[self._index]
+                for individual in
+                generation
+            ]
+        )
+
+
 class Logger(object):
 
     def __init__(self, operations: t.Optional[OrderedDict[str, LoggingOperation]] = None):
@@ -74,8 +90,8 @@ class Logger(object):
 
         self._cache_fitnesses = any(
             isinstance(operation, FitnessLoggingOperation)
-            for operation in
-            self._operations.values()
+                for operation in
+                self._operations.values()
         )
 
         self._values: t.List[LogFrame] = []
